@@ -17,10 +17,14 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
           - os: windows-latest
             target: x86_64-pc-windows-msvc
           - os: macos-latest
             target: x86_64-apple-darwin
+          - os: macos-latest
+            target: aarch64-apple-darwin
 
     steps:
       - name: Checkout
@@ -67,7 +71,8 @@ jobs:
       - name: Build release
         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Prepare artifact
+      - name: Prepare artifact (Unix)
+        if: runner.os != 'Windows'
         shell: bash
         env:
           VERSION: ${{ steps.tag.outputs.next_tag }}
@@ -102,6 +107,31 @@ jobs:
             shasum -a 256 "$ARCHIVE_NAME" > "${ARCHIVE_NAME}.sha256"
           fi
 
+      - name: Prepare artifact (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.tag.outputs.next_tag }}
+        run: |
+          $BinName = "sha256sum-rs"
+          $BinFile = "target/${{ matrix.target }}/release/${BinName}.exe"
+          if (-not (Test-Path $BinFile)) {
+            Write-Error "Binary not found: $BinFile"
+          }
+
+          $ArchiveName = "$($BinName)-$($Env:VERSION)-${{ matrix.target }}.zip"
+
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item $BinFile dist/
+
+          Compress-Archive -Path "dist/$BinName.exe" -DestinationPath "dist/$ArchiveName" -Force
+
+          if (Get-Command sha256sum -ErrorAction SilentlyContinue) {
+            sha256sum "dist/$ArchiveName" | Out-File "dist/$ArchiveName.sha256" -Encoding ascii
+          } elseif (Get-Command shasum -ErrorAction SilentlyContinue) {
+            shasum -a 256 "dist/$ArchiveName" | Out-File "dist/$ArchiveName.sha256" -Encoding ascii
+          }
+
       - name: Upload assets to release
         uses: svenstaro/upload-release-action@v2
         with:
@@ -109,3 +139,4 @@ jobs:
           file: dist/*
           tag: ${{ steps.tag.outputs.next_tag }}
           file_glob: true
+          overwrite: true
