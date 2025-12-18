@@ -1,13 +1,18 @@
 use sha2::{Digest, Sha256};
 use std::env;
 use std::fs::File;
-use std::io::{self, Read};
+use std::io::{self, IsTerminal, Read};
 
 const PKG_NAME: &str = env!("CARGO_PKG_NAME");
 const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 const BUILD_TIME: &str = env!("BUILD_TIME");
 const GIT_COMMIT: &str = env!("GIT_COMMIT");
 const TARGET: &str = env!("TARGET_TRIPLE");
+
+fn stdin_has_data() -> bool {
+    // true se NÃO for terminal → tipicamente pipe/redirect
+    !io::stdin().is_terminal()
+}
 
 fn hash_reader<R: Read>(mut r: R) -> io::Result<String> {
     let mut hasher = Sha256::new();
@@ -53,6 +58,11 @@ fn main() -> io::Result<()> {
 
     // Sem argumentos: lê de stdin, como o sha256sum.
     if args.is_empty() {
+        if !stdin_has_data() {
+            eprintln!("sem dados em stdin; terminar.");
+            std::process::exit(1);
+        }
+
         let hash = hash_reader(io::stdin())?;
         // sha256sum não mostra nome quando é stdin.
         println!("{}  -", hash);
