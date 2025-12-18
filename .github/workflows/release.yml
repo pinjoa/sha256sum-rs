@@ -37,7 +37,7 @@ jobs:
       - name: Prepare artifact
         shell: bash
         run: |
-          VERSION="${GITHUB_REF#refs/tags/}"   # ex: v0.1.0
+          VERSION="${GITHUB_REF#refs/tags/}"   # ex: v0.1.0 
           BIN_NAME="sha256sum-rs"
 
           case "${{ matrix.target }}" in
