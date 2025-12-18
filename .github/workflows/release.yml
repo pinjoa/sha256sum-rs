@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-and-release:
+    name: Build and release (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: macos-latest
+            target: x86_64-apple-darwin
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Build release
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Prepare artifact
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/}"   # ex: v0.1.0
+          BIN_NAME="sha256sum-rs"
+
+          case "${{ matrix.target }}" in
+            *windows*)
+              BIN_FILE="target/${{ matrix.target }}/release/${BIN_NAME}.exe"
+              ;;
+            *)
+              BIN_FILE="target/${{ matrix.target }}/release/${BIN_NAME}"
+              ;;
+          esac
+
+          ARCHIVE_NAME="${BIN_NAME}-${VERSION}-${{ matrix.target }}.zip"
+          mkdir -p dist
+          cp "$BIN_FILE" "./dist/"
+          cd dist
+          zip "$ARCHIVE_NAME" "$(basename "$BIN_FILE")"
+
+          # calcular hash SHA-256 do zip
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "$ARCHIVE_NAME" > "${ARCHIVE_NAME}.sha256"
+          elif command -v shasum >/dev/null 2>&1; then
+            shasum -a 256 "$ARCHIVE_NAME" > "${ARCHIVE_NAME}.sha256"
+          fi
+
+      - name: Upload assets to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: dist/*
+          tag: ${{ github.ref }}
+          file_glob: true

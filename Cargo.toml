@@ -1,0 +1,11 @@
+[package]
+name = "sha256sum-rs"
+version = "0.1.0"
+edition = "2024"
+authors = ["João Pinto"]
+license = "MIT"
+description = "Uma ferramenta CLI rápida e segura para gerar 'sha256sum' de um ficheiro ou qualquer conteúdo via 'stdin'."
+
+[dependencies]
+sha2 = "0.10"
+hex = "0.4"
