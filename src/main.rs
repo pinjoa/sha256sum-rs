@@ -33,12 +33,12 @@ fn hash_reader<R: Read>(mut r: R) -> io::Result<String> {
 
 fn print_version() {
     // linha principal: tipo `sha256sum-rs v0.1.0 (x86_64-pc-windows-gnu)`
-    let mut ver = PKG_VERSION;
+    let mut ver = "v".to_owned() + PKG_VERSION;
     if !BUILD_TAG.is_empty() && (PKG_VERSION != BUILD_TAG) {
-        ver = BUILD_TAG;
+        ver = BUILD_TAG.to_string();
     }
 
-    println!("{} v{} ({})", PKG_NAME, ver, TARGET);
+    println!("{} {} ({})", PKG_NAME, ver, TARGET);
 
     // só imprime os campos extra se não estiverem vazios
     if !BUILD_TIME.is_empty() {
