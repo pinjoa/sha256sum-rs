@@ -8,7 +8,57 @@ permissions:
   contents: write
 
 jobs:
+  prepare-release:
+    runs-on: ubuntu-latest
+    outputs:
+      next_tag: ${{ steps.tag.outputs.next_tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine next tag and bump Cargo.toml
+        id: tag
+        shell: bash
+        run: |
+          LAST_TAG=$(git tag --list 'v*' --sort=-v:refname | head -n1)
+
+          if [ -z "$LAST_TAG" ]; then
+            NEXT_TAG="v0.1.0"
+          else
+            VER=${LAST_TAG#v}
+            IFS='.' read -r MA MIN PA <<< "$VER"
+            PA=$((PA + 1))
+            NEXT_TAG="v${MA}.${MIN}.${PA}"
+          fi
+
+          echo "next_tag=$NEXT_TAG" >> "$GITHUB_OUTPUT"
+
+          NEW_VER=${NEXT_TAG#v}
+          perl -pi -e "s/^version *= *\"[0-9]+\.[0-9]+\.[0-9]+\"/version = \"$NEW_VER\"/" Cargo.toml
+          grep '^version' Cargo.toml
+
+      - name: Commit bumped version (optional)
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet; then
+            git commit -am "Bump version for release"
+            git push origin HEAD
+          fi
+
+      - name: Create and push tag
+        env:
+          NEXT_TAG: ${{ steps.tag.outputs.next_tag }}
+        shell: bash
+        run: |
+          git tag "$NEXT_TAG"
+          git push origin "$NEXT_TAG"
+
   build-and-release:
+    needs: prepare-release
     name: Build and release (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
 
@@ -37,51 +87,16 @@ jobs:
       - name: Add target
         run: rustup target add ${{ matrix.target }}
 
-      - name: Determine next tag
-        id: tag
-        shell: bash
-        run: |
-          LAST_TAG=$(git tag --list 'v*' --sort=-v:refname | head -n1)
-
-          if [ -z "$LAST_TAG" ]; then
-            NEXT_TAG="v0.1.0"
-          else
-            VER=${LAST_TAG#v}
-            IFS='.' read -r MA MIN PA <<< "$VER"
-            PA=$((PA + 1))
-            NEXT_TAG="v${MA}.${MIN}.${PA}"
-          fi
-
-          echo "last_tag=$LAST_TAG" >> "$GITHUB_OUTPUT"
-          echo "next_tag=$NEXT_TAG" >> "$GITHUB_OUTPUT"
-          # atualizar Cargo.toml com a nova versão (sem o 'v')
-          NEW_VER=${NEXT_TAG#v}
-          perl -pi -e "s/^version *= *\"[0-9]+\.[0-9]+\.[0-9]+\"/version = \"$NEW_VER\"/" Cargo.toml
-          # opcional: mostrar a versão que ficou no manifest
-          grep '^version' Cargo.toml
-
-      - name: Create and push tag
-        if: steps.tag.outputs.next_tag != ''
+      - name: Build release
         env:
-          NEXT_TAG: ${{ steps.tag.outputs.next_tag }}
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          git tag "$NEXT_TAG"
-          git push origin "$NEXT_TAG"
-
-      - name: Build release (native)
-        env:
-          BUILD_TAG: ${{ steps.tag.outputs.next_tag }}
+          BUILD_TAG: ${{ needs.prepare-release.outputs.next_tag }}
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Prepare artifact (Unix)
         if: runner.os != 'Windows'
         shell: bash
         env:
-          VERSION: ${{ steps.tag.outputs.next_tag }}
+          VERSION: ${{ needs.prepare-release.outputs.next_tag }}
         run: |
           BIN_NAME="sha256sum-rs"
 
@@ -106,6 +121,7 @@ jobs:
           cd dist
 
           zip "$ARCHIVE_NAME" "$(basename "$BIN_FILE")"
+          rm "$(basename "$BIN_FILE")"
 
           if command -v sha256sum >/dev/null 2>&1; then
             sha256sum "$ARCHIVE_NAME" > "${ARCHIVE_NAME}.sha256"
@@ -117,7 +133,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         env:
-          VERSION: ${{ steps.tag.outputs.next_tag }}
+          VERSION: ${{ needs.prepare-release.outputs.next_tag }}
         run: |
           $BinName = "sha256sum-rs"
           $BinFile = "target/${{ matrix.target }}/release/${BinName}.exe"
@@ -131,6 +147,7 @@ jobs:
           Copy-Item $BinFile dist/
 
           Compress-Archive -Path "dist/$BinName.exe" -DestinationPath "dist/$ArchiveName" -Force
+          Remove-Item "dist/$BinName.exe"
 
           if (Get-Command sha256sum -ErrorAction SilentlyContinue) {
             sha256sum "dist/$ArchiveName" | Out-File "dist/$ArchiveName.sha256" -Encoding ascii
@@ -143,6 +160,6 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: dist/*
-          tag: ${{ steps.tag.outputs.next_tag }}
+          tag: ${{ needs.prepare-release.outputs.next_tag }}
           file_glob: true
           overwrite: true
