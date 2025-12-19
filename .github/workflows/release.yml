@@ -53,6 +53,11 @@ jobs:
 
           echo "last_tag=$LAST_TAG" >> "$GITHUB_OUTPUT"
           echo "next_tag=$NEXT_TAG" >> "$GITHUB_OUTPUT"
+          # atualizar Cargo.toml com a nova versão (sem o 'v')
+          NEW_VER=${NEXT_TAG#v}
+          sed -i "s/^version *= *\"[0-9]\+\.[0-9]\+\.[0-9]\+\"/version = \"${NEW_VER}\"/" Cargo.toml
+          # opcional: mostrar a versão que ficou no manifest
+          grep '^version' Cargo.toml
 
       - name: Create and push tag
         if: steps.tag.outputs.next_tag != ''
