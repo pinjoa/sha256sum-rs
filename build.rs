@@ -29,8 +29,11 @@ fn main() {
     // Target triple fornecido pelo Cargo (funciona em qualquer SO/plataforma)
     let target = std::env::var("TARGET").unwrap_or_default(); // ex: x86_64-unknown-linux-gnu [web:71][web:74]
 
+    let build_tag = std::env::var("BUILD_TAG").unwrap_or_default();
+
     // Exportar para o binário como variáveis de ambiente em tempo de compilação
     println!("cargo:rustc-env=BUILD_TIME={}", build_time);
     println!("cargo:rustc-env=GIT_COMMIT={}", git_commit);
     println!("cargo:rustc-env=TARGET_TRIPLE={}", target);
+    println!("cargo:rustc-env=BUILD_TAG={}", build_tag);
 }
