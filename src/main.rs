@@ -8,6 +8,7 @@ const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 const BUILD_TIME: &str = env!("BUILD_TIME");
 const GIT_COMMIT: &str = env!("GIT_COMMIT");
 const TARGET: &str = env!("TARGET_TRIPLE");
+const BUILD_TAG: &str = env!("BUILD_TAG");
 
 fn stdin_has_data() -> bool {
     // true se NÃO for terminal → tipicamente pipe/redirect
@@ -32,12 +33,12 @@ fn hash_reader<R: Read>(mut r: R) -> io::Result<String> {
 
 fn print_version() {
     // linha principal: tipo `sha256sum-rs v0.1.0 (x86_64-pc-windows-gnu)`
-    println!(
-        "{name} v{ver} ({target})",
-        name = PKG_NAME,
-        ver = PKG_VERSION,
-        target = TARGET
-    );
+    let mut ver = PKG_VERSION;
+    if !BUILD_TAG.is_empty() && (PKG_VERSION != BUILD_TAG) {
+        ver = BUILD_TAG;
+    }
+
+    println!("{} v{} ({})", PKG_NAME, ver, TARGET);
 
     // só imprime os campos extra se não estiverem vazios
     if !BUILD_TIME.is_empty() {
